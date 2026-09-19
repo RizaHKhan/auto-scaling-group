@@ -18,12 +18,27 @@ import * as cdk from "aws-cdk-lib/core";
 import { Construct } from "constructs";
 // import * as sqs from 'aws-cdk-lib/aws-sqs';
 
+export interface AutoScalingGroupStackProps extends cdk.StackProps {
+  /**
+   * The VPC ID to deploy the Auto Scaling Group into.
+   * Can be passed via props, CDK context (-c vpcId=vpc-xxx), or VPC_ID env var.
+   *
+   * @default - context 'vpcId', process.env.VPC_ID, or 'vpc-0918d046dfe2ddafa'
+   */
+  readonly vpcId?: string;
+}
+
 export class AutoScalingGroupStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+  constructor(scope: Construct, id: string, props?: AutoScalingGroupStackProps) {
     super(scope, id, props);
 
-    const vpc = Vpc.fromLookup(this, 'Vpc', {
-      vpcId: 'vpc-0918d046dfe2ddafa',
+    const vpcId =
+      props?.vpcId ??
+      this.node.tryGetContext("vpcId") ??
+      process.env.VPC_ID
+
+    const vpc = Vpc.fromLookup(this, "Vpc", {
+      vpcId,
     });
 
     // Application Load Balancers require subnets in at least two Availability Zones
