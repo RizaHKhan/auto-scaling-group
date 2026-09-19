@@ -1,0 +1,17 @@
+{
+  "vpc-provider:account=525391386837:filter.vpc-id=vpc-0918d046dfe2ddafa:region=us-east-1:returnAsymmetricSubnets=true": {
+    "vpcId": "vpc-0918d046dfe2ddafa",
+    "vpcCidrBlock": "10.0.0.0/16",
+    "ownerAccountId": "525391386837",
+    "availabilityZones": [],
+    "subnetGroups": []
+  },
+  "availability-zones:account=525391386837:region=us-east-1": [
+    "us-east-1a",
+    "us-east-1b",
+    "us-east-1c",
+    "us-east-1d",
+    "us-east-1e",
+    "us-east-1f"
+  ]
+}
