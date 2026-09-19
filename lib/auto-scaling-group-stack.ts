@@ -1,4 +1,4 @@
-import { AutoScalingGroup } from "aws-cdk-lib/aws-autoscaling";
+import { AutoScalingGroup, UpdatePolicy } from "aws-cdk-lib/aws-autoscaling";
 import {
   CfnInternetGateway,
   CfnVPCGatewayAttachment,
@@ -62,7 +62,6 @@ export class AutoScalingGroupStack extends cdk.Stack {
       "dnf install -y httpd php",
       "systemctl start httpd",
       "systemctl enable httpd",
-      'echo "<h1>Hello from Apache and PHP behind ALB</h1><?php phpinfo(); ?>" > /var/www/html/index.php',
       "systemctl enable amazon-ssm-agent",
       "systemctl restart amazon-ssm-agent"
     );
@@ -90,6 +89,10 @@ export class AutoScalingGroupStack extends cdk.Stack {
       launchTemplate,
       minCapacity: 1,
       maxCapacity: 2,
+      updatePolicy: UpdatePolicy.rollingUpdate({
+        minInstancesInService: 1,
+        pauseTime: cdk.Duration.minutes(2),
+      }),
     });
 
     const lb = new ApplicationLoadBalancer(this, "ALB", {
@@ -108,6 +111,14 @@ export class AutoScalingGroupStack extends cdk.Stack {
     listener.addTargets("TargetFleet", {
       port: 80,
       targets: [asg],
+      healthCheck: {
+        path: "/",
+        interval: cdk.Duration.seconds(15),
+        healthyThresholdCount: 2,
+        unhealthyThresholdCount: 2,
+        timeout: cdk.Duration.seconds(5),
+      },
+      deregistrationDelay: cdk.Duration.seconds(30),
     });
 
     new cdk.CfnOutput(this, "LoadBalancerDNS", {
