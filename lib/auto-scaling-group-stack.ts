@@ -62,7 +62,9 @@ export class AutoScalingGroupStack extends cdk.Stack {
       "dnf install -y httpd php",
       "systemctl start httpd",
       "systemctl enable httpd",
-      'echo "<h1>Hello from Apache and PHP behind ALB</h1><?php phpinfo(); ?>" > /var/www/html/index.php'
+      'echo "<h1>Hello from Apache and PHP behind ALB</h1><?php phpinfo(); ?>" > /var/www/html/index.php',
+      "systemctl enable amazon-ssm-agent",
+      "systemctl restart amazon-ssm-agent"
     );
 
     const asgSecurityGroup = new SecurityGroup(this, "AsgSecurityGroup", {
