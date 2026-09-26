@@ -1,14 +1,42 @@
-# Welcome to your CDK TypeScript project
+# EC2 on Autoscaling groups
 
-This is a blank project for CDK development with TypeScript.
+## Checklist
 
-The `cdk.json` file tells the CDK Toolkit how to execute your app.
+### VPC
 
-## Useful commands
+We need to create or find an existing VPC
 
-* `npm run build`   type-check the project
-* `npm run watch`   watch for changes and type-check
-* `npm run test`    perform the jest unit tests
-* `npx cdk deploy`  deploy this stack to your default AWS account/region
-* `npx cdk diff`    compare deployed stack with current state
-* `npx cdk synth`   emits the synthesized CloudFormation template
+```typescript
+const vpc = Vpc.fromLookup(this, "Vpc", {
+  vpcId: "asdfasdf",
+});
+```
+
+### Public Subnets
+
+We need 
+
+```typescript
+const publicSubnet1 = new PublicSubnet(this, "PublicSubnet1", {
+  vpcId: vpc.vpcId,
+  availabilityZone: this.availabilityZones[0],
+  cidrBlock: "10.0.1.0/24",
+  mapPublicIpOnLaunch: true,
+});
+```
+
+## Diagram
+
+```mermaid
+architecture-beta
+    group vpc(cloud)[VPC 0.0.0.0/16]
+        group asg(server)[Auto Scaling Group: max 2] in vpc
+            group az1(cloud)[AZ1] in asg
+              group subnet1(cloud)[PublicSubnet1] in az1
+                service instance1(logos:aws-ec2)[EC2] in subnet1
+            group az2(cloud)[AZ2] in asg
+              group subnet2(cloud)[PublicSubnet1] in az2
+                service instance2(logos:aws-ec2)[EC2] in subnet2
+          
+align column instance1 instance2
+```

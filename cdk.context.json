@@ -13,5 +13,12 @@
     "us-east-1d",
     "us-east-1e",
     "us-east-1f"
-  ]
+  ],
+  "vpc-provider:account=525391386837:region=us-east-1:returnAsymmetricSubnets=true": {
+    "vpcId": "vpc-0918d046dfe2ddafa",
+    "vpcCidrBlock": "10.0.0.0/16",
+    "ownerAccountId": "525391386837",
+    "availabilityZones": [],
+    "subnetGroups": []
+  }
 }

@@ -9,19 +9,16 @@ import {
   InstanceType,
   LaunchTemplate,
   MachineImage,
-  PrivateSubnet,
-  PublicSubnet,
   SecurityGroup,
   UserData,
-  Vpc,
 } from "aws-cdk-lib/aws-ec2";
 import { ApplicationLoadBalancer } from "aws-cdk-lib/aws-elasticloadbalancingv2";
 import { ManagedPolicy, Role, ServicePrincipal } from "aws-cdk-lib/aws-iam";
-import * as cdk from "aws-cdk-lib/core";
+import { StackProps, Stack, Duration } from "aws-cdk-lib/core";
 import { Construct } from "constructs";
-// import * as sqs from 'aws-cdk-lib/aws-sqs';
+import { networking } from "./constructs/";
 
-export interface AutoScalingGroupStackProps extends cdk.StackProps {
+export interface AutoScalingGroupStackProps extends StackProps {
   /**
    * The VPC ID to deploy the Auto Scaling Group into.
    * Can be passed via props, CDK context (-c vpcId=vpc-xxx), or VPC_ID env var.
@@ -31,57 +28,33 @@ export interface AutoScalingGroupStackProps extends cdk.StackProps {
   readonly vpcId?: string;
 }
 
-export class AutoScalingGroupStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: AutoScalingGroupStackProps) {
+export class AutoScalingGroupStack extends Stack {
+  constructor(
+    scope: Construct,
+    id: string,
+    props?: AutoScalingGroupStackProps,
+  ) {
     super(scope, id, props);
 
-    const vpcId =
-      props?.vpcId ??
-      this.node.tryGetContext("vpcId") ??
-      process.env.VPC_ID
-
-    const vpc = Vpc.fromLookup(this, "Vpc", {
-      vpcId,
-    });
-
-    // Application Load Balancers require subnets in at least two Availability Zones.
-    // Note: `this.availabilityZones` is a getter on `cdk.Stack` that returns the AZs
-    // available in the stack's environment (account/region), or CloudFormation tokens if environment-agnostic.
-    const publicSubnet1 = new PublicSubnet(this, "PublicSubnet1", {
-      vpcId: vpc.vpcId,
-      availabilityZone: this.availabilityZones[0],
-      cidrBlock: "10.0.1.0/24",
-      mapPublicIpOnLaunch: true,
-    });
-
-    const publicSubnet2 = new PublicSubnet(this, "PublicSubnet2", {
-      vpcId: vpc.vpcId,
-      availabilityZone: this.availabilityZones[1],
-      cidrBlock: "10.0.2.0/24",
-      mapPublicIpOnLaunch: true,
-    });
-
-    const privateSubnet1 = new PrivateSubnet(this, "PrivateSubnet1", {
-      vpcId: vpc.vpcId,
-      availabilityZone: this.availabilityZones[0],
-      cidrBlock: "10.0.3.0/24",
-      mapPublicIpOnLaunch: false,
-    });
-
-    const privateSubnet2 = new PrivateSubnet(this, "PrivateSubnet2", {
-      vpcId: vpc.vpcId,
-      availabilityZone: this.availabilityZones[1],
-      cidrBlock: "10.0.4.0/24",
-      mapPublicIpOnLaunch: false,
-    });
+    const { vpc, privateSubnets, publicSubnets } = networking(this);
 
     const internetGateway = new CfnInternetGateway(this, "InternetGateway");
-    const gatewayAttachment = new CfnVPCGatewayAttachment(this, "VpcGatewayAttachment", {
-      vpcId: vpc.vpcId,
-      internetGatewayId: internetGateway.ref,
-    });
-    publicSubnet1.addDefaultInternetRoute(internetGateway.ref, gatewayAttachment);
-    publicSubnet2.addDefaultInternetRoute(internetGateway.ref, gatewayAttachment);
+    const gatewayAttachment = new CfnVPCGatewayAttachment(
+      this,
+      "VpcGatewayAttachment",
+      {
+        vpcId: vpc.vpcId,
+        internetGatewayId: internetGateway.ref,
+      },
+    );
+    publicSubnets[0].addDefaultInternetRoute(
+      internetGateway.ref,
+      gatewayAttachment,
+    );
+    publicSubnets[1].addDefaultInternetRoute(
+      internetGateway.ref,
+      gatewayAttachment,
+    );
 
     const eip = new CfnEIP(this, "NatEIP", {
       domain: "vpc",
@@ -91,13 +64,13 @@ export class AutoScalingGroupStack extends cdk.Stack {
     // traffic for private subnets across all AZs, saving ~$32/month.
     // For mission-critical production, provision 1 NAT Gateway per AZ to avoid a single point of failure.
     const natGateway = new CfnNatGateway(this, "NatGateway", {
-      subnetId: publicSubnet1.subnetId,
+      subnetId: publicSubnets[0].subnetId,
       allocationId: eip.attrAllocationId,
     });
     natGateway.addResourceDependency(gatewayAttachment);
 
-    privateSubnet1.addDefaultNatRoute(natGateway.ref);
-    privateSubnet2.addDefaultNatRoute(natGateway.ref);
+    privateSubnets[0].addDefaultNatRoute(natGateway.ref);
+    privateSubnets[1].addDefaultNatRoute(natGateway.ref);
 
     const role = new Role(this, "SSMRole", {
       assumedBy: new ServicePrincipal("ec2.amazonaws.com"),
@@ -113,7 +86,7 @@ export class AutoScalingGroupStack extends cdk.Stack {
       "systemctl start httpd",
       "systemctl enable httpd",
       "systemctl enable amazon-ssm-agent",
-      "systemctl restart amazon-ssm-agent"
+      "systemctl restart amazon-ssm-agent",
     );
 
     const asgSecurityGroup = new SecurityGroup(this, "AsgSecurityGroup", {
@@ -138,14 +111,14 @@ export class AutoScalingGroupStack extends cdk.Stack {
     const asg = new AutoScalingGroup(this, "AutoScalingGroup", {
       vpc,
       vpcSubnets: {
-        subnets: [privateSubnet1, privateSubnet2],
+        subnets: privateSubnets
       },
       launchTemplate,
       minCapacity: 2,
       maxCapacity: 3,
       updatePolicy: UpdatePolicy.rollingUpdate({
         minInstancesInService: 1,
-        pauseTime: cdk.Duration.minutes(2),
+        pauseTime: Duration.minutes(2),
       }),
     });
     asg.node.addDependency(natGateway);
